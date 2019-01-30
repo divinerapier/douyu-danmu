@@ -3,17 +3,50 @@ extern crate byteorder;
 use byteorder::ByteOrder;
 #[allow(unused_imports)]
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
+use std::error::Error;
 use std::io::Read;
 #[allow(unused_imports)]
 use std::io::Write;
 
 fn main() {
+    let matches = clap::App::new("douyu-danmu")
+        .version("0.1.0")
+        .author("divinerapier <poriter.coco@gmail.com>")
+        .arg(
+            clap::Arg::with_name("room")
+                .short("r")
+                .long("room")
+                .value_name("room_id")
+                .help("Sets a custom room id")
+                .takes_value(true),
+        )
+        .get_matches();
+    let room_id = matches.value_of("room").unwrap();
+    let room_id = room_id.parse().unwrap();
+
     let mut danmu = Danmu::new("openbarrage.douyutv.com:8601");
-    let room_id = 5220173;
+    // let room_id = 5220173;
+    // let room_id = 5324159;
+    // let room_id = 6153348;
+    // let room_id = 5981137;
+    // let room_id = 52876;
+    // let room_id = 9847;
+    // let room_id = 888;
+    // let room_id = 70002;
     danmu.login(room_id);
     danmu.join_group(room_id);
     danmu.keep_alive();
     danmu.run();
+}
+
+struct DanmuError {
+    message: String,
+}
+
+impl std::fmt::Debug for DanmuError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
 }
 
 pub struct Danmu {
@@ -53,16 +86,27 @@ impl Danmu {
     }
 
     pub fn join_group(&mut self, room_id: i32) {
-        let join_group_message: String = format!("type@=joingroup/rid@={}/gid@=-9999/", room_id);
-        self.write_message(&join_group_message);
+        let mut clone_danmu = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            let join_group_message: String =
+                format!("type@=joingroup/rid@={}/gid@=-9999/", room_id);
+            clone_danmu.write_message(&join_group_message);
+        });
     }
 
     pub fn run(&mut self) {
         loop {
             let data = self.read_payload();
-            if data.starts_with("type@=loginres".as_bytes()) {
-                continue;
+            if data.is_err() {
+                println!(
+                    "{} {:?}",
+                    chrono::prelude::Local::now(),
+                    data.err().unwrap()
+                );
+                return;
             }
+            let data: Vec<u8> = data.unwrap();
             if data.starts_with("type@=chatmsg".as_bytes()) {
                 match self.parse_chatmessage(&data) {
                     (Some(user), Some(txt)) => {
@@ -89,28 +133,64 @@ impl Danmu {
 
                 continue;
             }
-            if data.starts_with("type@=lgpoolsite".as_bytes()) {}
+            if data.starts_with("type@=loginres".as_bytes()) {
+                continue;
+            }
+            if data.starts_with("type@=lgpoolsite".as_bytes()) {
+                // Ok("type@=lgpoolsite/zone@=1/deadsec@=17070/piv@=giftid@AA=2095@AScuserpg@AA=925922@AScownerpg@AA=232302@AScurps@AA=0@ASnuserpg@AA=23062@ASnownerpg@AA=5783@AS@Sgiftid@AA=2096@AScuserpg@AA=2082326@AScownerpg@AA=470965@AScurps@AA=0@ASnuserpg@AA=2636@ASnownerpg@AA=659@AS@Sgiftid@AA=2097@AScuserpg@AA=1099805@AScownerpg@AA=274953@AScurps@AA=0@ASnuserpg@AA=1051@ASnownerpg@AA=262@AS@S/\u{0}")
+                continue;
+            }
+            if data.starts_with("type@=noble_num_info".as_bytes()) {
+                continue;
+            }
+            if data.starts_with("type@=shrn".as_bytes()) {
+                // Ok("type@=shrn/rid@=5981137/srid@=5981137/uid@=243757184/cate_id@=201/ri@=sc@A=0@Sidx@A=20@S/\u{0}")
+                continue;
+            }
+            if data.starts_with("type@=uenter".as_bytes()) {
+                // Ok("type@=uenter/rid@=5981137/uid@=207346656/nn@=Christ无痕/level@=42/ic@=avatar_v3@S201901@S1af75c7cbe2c436284996ccb13108e0c/rni@=0/el@=/sahf@=0/wgei@=0/cbid@=29411/\u{0}")
+                continue;
+            }
+            if data.starts_with("type@=ul_ranklist".as_bytes()) {
+                // Ok("type@=ul_ranklist/rid@=5981137/ts@=1548814530/list_level@=crk@AA=1@ASuid@AA=234011126@ASlevel@AA=41@ASnn@AA=只摘星星不摘草莓@ASic@AA=avatar_v3@AAS201901@AASbf7ca23d9a0c40ee8e8717c556fae081@ASrg@AA=4@ASpg@AA=1@ASgt@AA=0@ASne@AA=3@ASsahf@AA=0@ASct@AA=2@AS@Scrk@AA=2@ASuid@AA=250612954@ASlevel@AA=33@ASnn@AA=洗月李乘风@ASic@AA=avatar_v3@AAS201812@AAS2e262ceef3c8621cf19e64c74f4385cb@ASrg@AA=1@ASpg@AA=1@ASgt@AA=0@ASne@AA=3@ASsahf@AA=0@ASct@AA=1@AS@Scrk@AA=3@ASuid@AA=103909722@ASlevel@AA=39@ASnn@AA=罓橙汁丶@ASic@AA=avatar_v3@AAS201901@AASdcb4541416cc40ea80a75abb29b599a5@ASrg@AA=4@ASpg@AA=1@ASgt@AA=0@ASne@AA=2@ASsahf@AA=0@ASct@AA=1@AS@Scrk@AA=4@ASuid@AA=257461061@ASlevel@AA=33@ASnn@AA=缘分丶让我们相遇@ASic@AA=avatar_v3@AAS201901@AASee772e1dc7424c1f8562ade45338d522@ASrg@AA=4@ASpg@AA=1@ASgt@AA=0@ASne@AA=1@ASsahf@AA=0@ASct@AA=1@AS@Scrk@AA=5@ASuid@AA=30178092@ASlevel@AA=22@ASnn@AA=怜身眼中人丶@ASic@AA=avatar_v3@AAS201812@AAS2733f77066f142e591a14f8310ccb752@ASrg@AA=4@ASpg@AA=1@ASgt@AA=0@ASne@AA=7@ASsahf@AA=0@ASct@AA=0@AS@Scrk@AA=6@ASuid@AA=32765858@ASlevel@AA=12@ASnn@AA=亲切的乱码弟弟101@ASic@AA=avatar@AASdefault@AAS09@ASrg@AA=1@ASpg@AA=1@ASgt@AA=0@ASne@AA=7@ASsahf@AA=0@ASct@AA=1@AS@Scrk@AA=7@ASuid@AA=204718094@ASlevel@AA=18@ASnn@AA=蔡羽中聪的四姨夫@ASic@AA=avatar_v3@AAS201901@AAS63857de01deb4976abf9d001c2459120@ASrg@AA=1@ASpg@AA=1@AS\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}")
+                continue;
+            }
         }
     }
 
-    fn read_payload(&mut self) -> Vec<u8> {
+    fn read_payload(&mut self) -> Result<Vec<u8>, DanmuError> {
         let mut header: [u8; 12] = [0; 4 + 4 + 4];
-        match self.conn.read(&mut header) {
+        match self.conn.read_exact(&mut header) {
             Ok(_) => {}
             Err(e) => {
-                println!("failed to read from conn. {}", e);
+                return Err(DanmuError {
+                    message: format!("read header: {}", e),
+                });
             }
         }
         let length = LittleEndian::read_u32(&header[0..4]);
-        LittleEndian::read_u16(&header[8..10]);
+        let length2 = LittleEndian::read_u32(&header[4..8]);
+        let message_type = LittleEndian::read_u16(&header[8..10]);
+        if length != length2 || length <= 0 || message_type != 690 {
+            return Err(DanmuError {
+                message: format!(
+                    "invalid header. length: {} length2: {}, message type: {}",
+                    length, length2, message_type
+                ),
+            });
+        }
         let mut data: Vec<u8> = vec![0; (length - 8) as usize];
-        match self.conn.read(data.as_mut_slice()) {
-            Ok(_) => {}
+        match self.conn.read_exact(data.as_mut_slice()) {
+            Ok(_) => {
+                // println!("{:?}", std::str::from_utf8(&data.clone()));
+                return Ok(data);
+            }
             Err(e) => {
-                println!("failed to read from conn. {}", e);
+                return Err(DanmuError {
+                    message: e.description().to_owned(),
+                });
             }
         }
-        data
     }
 
     fn write_message(&mut self, message: &str) {
